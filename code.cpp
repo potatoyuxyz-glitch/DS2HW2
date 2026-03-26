@@ -156,28 +156,37 @@ class TwoThreeTree {
 int ParseNumber(std::string temp) {
     std::string num = "";
     for (int i = 0; i < temp.size(); i++) {
-        if (temp[i] != '"' && temp[i] != ',') {
+        if (temp[i] != '"' && temp[i] != ',') { // 排除'"' and ','
             num = num + temp[i];
         }
     }
-    return std::stoi(num);
+
+    int result;
+    try {
+        result = std::stoi(num);
+    } catch (const std::invalid_argument& exception) {
+        result = 0;
+    } catch (const std::out_of_range& exception) {
+        result = 0;
+    }
+    return result;
 }
 
 bool ReadFile(std::vector<Data> &datalist) {
     std::string name;
     std::string filename;
     while (true) {
-        std::cout << "\nInput a file number ([0] Quit): ";
+        std::cout << "Input a file number ([0] Quit): ";
         std::cin >> name;
         if (name == "0") {
             return false;
         }
         filename = "input" + name + ".txt";
-        std::ifstream inputFile(filename);
+        std::ifstream inputFile(filename); // 開啟檔案
         if (!inputFile.is_open()) {
             std::cout << "\n### " << filename << " does not exist! ###" << std::endl;
-            std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cin.clear(); // 重設錯誤狀態位元(cin)，如果不先cin.clear()那麼cin不會運作
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // 清除緩衝區中的殘留字元
         } else {
             break;
         }
@@ -190,6 +199,7 @@ bool ReadFile(std::vector<Data> &datalist) {
     std::getline(inputFile, line);
     std::getline(inputFile, line);
     std::getline(inputFile, line);      // 前三行
+
     while (std::getline(inputFile, line)) {
         Data newdata;
         newdata.serial = i;
@@ -248,18 +258,21 @@ void OutputFile() {
     outputfile.close();
 }
 void LetsGo() {
-    std::cout << "* Data Structures and Algorithms *" << std::endl;
-    std::cout << "****** Balanced Search Tree ******" << std::endl;
-    std::cout << "* 0. QUIT                        *" << std::endl;
-    std::cout << "* 1. Build 23 tree               *" << std::endl;
-    std::cout << "* 2. Build AVL tree              *" << std::endl;
-    std::cout << "**********************************" << std::endl;
-    std::cout << "Input a choice(0, 1, 2, 3, 4): ";
     int command;
     std::vector<Data> datalist;
-    while (std::cin >> command) {
+    while(true) {
+        std::cout << "* Data Structures and Algorithms *" << std::endl;
+        std::cout << "****** Balanced Search Tree ******" << std::endl;
+        std::cout << "* 0. QUIT                        *" << std::endl;
+        std::cout << "* 1. Build 23 tree               *" << std::endl;
+        std::cout << "* 2. Build AVL tree              *" << std::endl;
+        std::cout << "**********************************" << std::endl;
+        std::cout << "Input a choice(0, 1, 2, 3, 4): ";
+        std::cin >> command;
+        std::cout << std::endl;
+
         if (command == 0) {
-            break;
+            return;
         } else if (command == 1) {
             if (datalist.size() != 0) {
                 datalist.clear();
@@ -270,13 +283,6 @@ void LetsGo() {
         } else {
             std::cout << "\nCommand does not exist!\n" << std::endl;
         }
-        std::cout << "* Data Structures and Algorithms *" << std::endl;
-        std::cout << "****** Balanced Search Tree ******" << std::endl;
-        std::cout << "* 0. QUIT                        *" << std::endl;
-        std::cout << "* 1. Build 23 tree               *" << std::endl;
-        std::cout << "* 2. Build AVL tree              *" << std::endl;
-        std::cout << "**********************************" << std::endl;
-        std::cout << "Input a choice(0, 1, 2, 3, 4): ";
     }
 }
 
