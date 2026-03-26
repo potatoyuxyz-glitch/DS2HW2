@@ -1,4 +1,4 @@
-/*11327117 黃郁婷*/
+/*11327117 黃郁婷 11327143 廖宇晨*/
 #include <vector>
 #include <iostream>
 #include <string>
@@ -56,8 +56,8 @@ class TwoThreeTree {
         if (!node->isLeaf) {
             node1->children = {node->children[0], node->children[1]};
             node2->children = {node->children[2], node->children[3]};
-            for (auto child : node1->children) child->parent = node1;
-            for (auto child : node2->children) child->parent = node2;
+            for (Node* child : node1->children) child->parent = node1;
+            for (Node* child : node2->children) child->parent = node2;
         }
 
         int midKey = node->keys[1];
