@@ -34,7 +34,11 @@ struct Node {
     std::vector<Node*> children;
     Node* parent;
 
-    Node(Node* p = nullptr, bool leaf = true) : parent(p), isLeaf(leaf) {}
+    Node(Node* p, bool leaf) {
+        parent = p;
+        isLeaf = leaf; 
+    }
+
 };
 
 class TwoThreeTree {
@@ -88,36 +92,98 @@ class TwoThreeTree {
         }
         delete node; // 釋放舊節點
     }
+
+    // 取得樹高：2-3 樹所有葉子都在同一層，只需向左下找
+    int GetHeight(Node* node) {
+        if (node == nullptr) return 0;
+        // 如果是葉子，高度為 1
+        if (node->isLeaf) return 1;
+        // 否則，高度為 1 加上子樹的高度
+        return 1 + GetHeight(node->children[0]);
+    }
+
+    // 取得總節點數：遞迴走訪每個節點
+    int CountNodes(Node* node) {
+        if (node == nullptr) return 0;
+        int count = 1; // 計算當前這個節點
+        if (!node->isLeaf) {
+            // 如果不是葉子，累加所有小孩的節點數
+            for (Node* child : node->children) {
+                count += CountNodes(child);
+            }
+        }
+        return count;
+    }
+
   public:
-    TwoThreeTree() : root(nullptr) {}
-    
+    TwoThreeTree() {
+        root = nullptr;
+    }
+
     void insertItem(int gradCount, int id) {
+        // 如果是第一筆資料直接插入
         if (root == nullptr) {
-            root = new Node();
+            root = new Node(nullptr, true);
             root->keys.push_back(gradCount);
             root->idLists.push_back({id});
             return;
         }
 
-        // 1. 尋找目標節點 (向下搜尋)
+        /*
+        1. 尋找目標節點 (向下搜尋)，使用迴圈
+            結束條件為當前節點是葉子(leaf)，如果不滿足條件就繼續往下
+            如果當前節點(curr)只有1個key(也就是curr->key.size() == 1)，檢查curr->key與插入資料(grandCount)的大小關係：
+                (1)如果curr->key[0] < grandCount，往下找最右邊的小孩(curr->children[size() - 1])
+                (2)如果curr->key[0] > grandCount，往下找最左邊的小孩(curr->children[0])
+                (3)如果curr->key[0] = grandCount，將插入資料的序號加入當前節點的idList，直接return
+            如果當前節點(curr)有2個key(也就是curr->key.size() == 2)，檢查curr->key與插入資料(grandCount)的大小關係：
+                (1)如果curr->key[1] < grandCount，往下找最右邊的小孩(curr->children[size() - 1])
+                (2)如果curr->key[0] > grandCount，往下找最左邊的小孩(curr->children[0])
+                (3)如果curr->key[1] > grandCount > curr->key[0]，往下找中間的小孩(curr->children[1])
+                (4)如果curr->key[0] = grandCount，將插入資料的序號加入當前節點的idList，直接return
+        */ 
         Node* curr = root;
         while (!curr->isLeaf) {
-            bool found = false;
+            // 先處理當前節點可能出現重複資料的情況
             for (int i = 0; i < curr->keys.size(); ++i) {
-                if (gradCount == curr->keys[i]) { // 數值已存在，直接加入序號
+                if (gradCount == curr->keys[i]) {
                     curr->idLists[i].push_back(id);
                     return;
                 }
-                if (gradCount < curr->keys[i]) {
-                    curr = curr->children[i];
-                    found = true;
-                    break;
+            }
+
+            // 依照節點內的 key 數量決定去哪個小孩
+            if (curr->keys.size() == 1) {
+                // (1) 如果 curr->key[0] < gradCount，往下找最右邊的小孩
+                if (gradCount > curr->keys[0]) {
+                    curr = curr->children[1]; // size 為 1 時，children[1] 是最右邊
+                } 
+                // (2) 如果 curr->key[0] > gradCount，往下找最左邊的小孩
+                else {
+                    curr = curr->children[0];
+                }
+            } 
+            else if (curr->keys.size() == 2) {
+                // (1) 如果 curr->key[1] < gradCount，往下找最右邊的小孩
+                if (gradCount > curr->keys[1]) {
+                    curr = curr->children[2]; // size 為 2 時，children[2] 是最右邊
+                }
+                // (2) 如果 curr->key[0] > gradCount，往下找最左邊的小孩
+                else if (gradCount < curr->keys[0]) {
+                    curr = curr->children[0];
+                }
+                // (3) 如果 curr->key[1] > gradCount > curr->key[0]，往下找中間的小孩
+                else {
+                    curr = curr->children[1];
                 }
             }
-            if (!found) curr = curr->children.back();
         }
 
-        // 2. 檢查葉子中是否已有相同數值
+        /*
+        2. 經由第一步找到leaf之後，要在這個節點依照key的大小排序
+            首先檢查當前節點所有的key有沒有其中一個與插入資料(gradCount)相同
+            如果有，加到該key的idList裡面，直接return
+        */ 
         for (int i = 0; i < curr->keys.size(); ++i) {
             if (curr->keys[i] == gradCount) {
                 curr->idLists[i].push_back(id);
@@ -125,13 +191,31 @@ class TwoThreeTree {
             }
         }
 
-        // 3. 插入新資料並保持排序
-        auto it = lower_bound(curr->keys.begin(), curr->keys.end(), gradCount);
-        int pos = distance(curr->keys.begin(), it);
-        curr->keys.insert(it, gradCount);
-        curr->idLists.insert(curr->idLists.begin() + pos, {id});
+        
+        /*
+        3. 將 gradCount 設為一個新的 key 並將所有的 key 由小至大進行排序
+           使用 lower_bound 尋找應插入的位置，以維持 keys 的有序性
+        */
+   
+        // 1. 先把資料放進去
+        curr->keys.push_back(gradCount);
+        curr->idLists.push_back({id});
 
-        // 4. 若節點溢位（有 3 個 keys），執行分裂
+        // 2. 手動跑一次類似「插入排序」的邏輯（由後往前比）
+        for (int i = curr->keys.size() - 1; i > 0; i--) {
+            if (curr->keys[i] < curr->keys[i-1]) {
+                // 同步交換數值
+                std::swap(curr->keys[i], curr->keys[i-1]);
+                // 同步交換序號清單
+                std::swap(curr->idLists[i], curr->idLists[i-1]);
+            } else {
+                break; // 已經定位好了
+            }
+        }
+        /*
+        4. 若節點溢位（有 3 個 keys），執行分裂
+           分裂會將中間值上提，並建立兩個新的節點取代舊節點
+        */
         if (curr->keys.size() == 3) {
             split(curr);
         }
@@ -139,54 +223,50 @@ class TwoThreeTree {
 
     void ShowRootData(std::vector<Data> &datalist) {
         int count = 1;
+        int height = GetHeight(root);
+        std::cout << "Tree height = " << GetHeight(root) << "\n";
+        std::cout << "Number of nodes = " << CountNodes(root) << "\n";
         for (int i = 0; i < root->idLists.size(); i++) {
             for (int j = 0; j < root->idLists[i].size(); j++) {
-                std::cout << count << " " << datalist[root->idLists[i][j] - 1].serial << " ";
-                std::cout << datalist[root->idLists[i][j] - 1].school_name << " ";
-                std::cout << datalist[root->idLists[i][j] - 1].dept_name << " ";
-                std::cout << datalist[root->idLists[i][j] - 1].day_type << " ";
-                std::cout << datalist[root->idLists[i][j] - 1].level << " ";
-                std::cout << datalist[root->idLists[i][j] - 1].students << " ";
+                std::cout << count << ": [" << datalist[root->idLists[i][j] - 1].serial << "] ";
+                std::cout << datalist[root->idLists[i][j] - 1].school_name << ", ";
+                std::cout << datalist[root->idLists[i][j] - 1].dept_name << ", ";
+                std::cout << datalist[root->idLists[i][j] - 1].day_type << ", ";
+                std::cout << datalist[root->idLists[i][j] - 1].level << ", ";
+                std::cout << datalist[root->idLists[i][j] - 1].students << ", ";
                 std::cout << datalist[root->idLists[i][j] - 1].graduates << "\n";
+                count++;
             }
         }
+        std::cout << "\n" << std::endl;
     }
 };
 
 int ParseNumber(std::string temp) {
     std::string num = "";
     for (int i = 0; i < temp.size(); i++) {
-        if (temp[i] != '"' && temp[i] != ',') { // 排除'"' and ','
+        if (temp[i] != '"' && temp[i] != ',') {
             num = num + temp[i];
         }
     }
-
-    int result;
-    try {
-        result = std::stoi(num);
-    } catch (const std::invalid_argument& exception) {
-        result = 0;
-    } catch (const std::out_of_range& exception) {
-        result = 0;
-    }
-    return result;
+    return std::stoi(num);
 }
 
 bool ReadFile(std::vector<Data> &datalist) {
     std::string name;
     std::string filename;
     while (true) {
-        std::cout << "Input a file number ([0] Quit): ";
+        std::cout << "\nInput a file number ([0] Quit): ";
         std::cin >> name;
         if (name == "0") {
             return false;
         }
         filename = "input" + name + ".txt";
-        std::ifstream inputFile(filename); // 開啟檔案
+        std::ifstream inputFile(filename);
         if (!inputFile.is_open()) {
             std::cout << "\n### " << filename << " does not exist! ###" << std::endl;
-            std::cin.clear(); // 重設錯誤狀態位元(cin)，如果不先cin.clear()那麼cin不會運作
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // 清除緩衝區中的殘留字元
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         } else {
             break;
         }
@@ -199,7 +279,6 @@ bool ReadFile(std::vector<Data> &datalist) {
     std::getline(inputFile, line);
     std::getline(inputFile, line);
     std::getline(inputFile, line);      // 前三行
-
     while (std::getline(inputFile, line)) {
         Data newdata;
         newdata.serial = i;
@@ -258,21 +337,18 @@ void OutputFile() {
     outputfile.close();
 }
 void LetsGo() {
+    std::cout << "* Data Structures and Algorithms *" << std::endl;
+    std::cout << "****** Balanced Search Tree ******" << std::endl;
+    std::cout << "* 0. QUIT                        *" << std::endl;
+    std::cout << "* 1. Build 23 tree               *" << std::endl;
+    std::cout << "* 2. Build AVL tree              *" << std::endl;
+    std::cout << "**********************************" << std::endl;
+    std::cout << "Input a choice(0, 1, 2): ";
     int command;
     std::vector<Data> datalist;
-    while(true) {
-        std::cout << "* Data Structures and Algorithms *" << std::endl;
-        std::cout << "****** Balanced Search Tree ******" << std::endl;
-        std::cout << "* 0. QUIT                        *" << std::endl;
-        std::cout << "* 1. Build 23 tree               *" << std::endl;
-        std::cout << "* 2. Build AVL tree              *" << std::endl;
-        std::cout << "**********************************" << std::endl;
-        std::cout << "Input a choice(0, 1, 2, 3, 4): ";
-        std::cin >> command;
-        std::cout << std::endl;
-
+    while (std::cin >> command) {
         if (command == 0) {
-            return;
+            break;
         } else if (command == 1) {
             if (datalist.size() != 0) {
                 datalist.clear();
@@ -283,6 +359,13 @@ void LetsGo() {
         } else {
             std::cout << "\nCommand does not exist!\n" << std::endl;
         }
+        std::cout << "* Data Structures and Algorithms *" << std::endl;
+        std::cout << "****** Balanced Search Tree ******" << std::endl;
+        std::cout << "* 0. QUIT                        *" << std::endl;
+        std::cout << "* 1. Build 23 tree               *" << std::endl;
+        std::cout << "* 2. Build AVL tree              *" << std::endl;
+        std::cout << "**********************************" << std::endl;
+        std::cout << "Input a choice(0, 1, 2): ";
     }
 }
 
