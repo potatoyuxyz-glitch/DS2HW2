@@ -6,6 +6,7 @@
 #include <iomanip>      // setw
 #include <sstream>      // istringstream
 #include <cmath>        // log
+#include <algorithm>    // sort
 
 struct Data {
     int serial;
@@ -39,6 +40,18 @@ struct Node {
         isLeaf = leaf; 
     }
 
+};
+
+struct AVLNode {
+    std::string schoolName;    // 鍵值 (Key)：學校名稱
+    std::vector<int> idList;   // 存放該校所有系所的原始資料序號 (Serial)
+    int height;                // 節點高度
+    AVLNode *left, *right;
+
+    AVLNode(std::string name, int id) 
+        : schoolName(name), height(1), left(nullptr), right(nullptr) {
+        idList.push_back(id);
+    }
 };
 
 class TwoThreeTree {
@@ -237,6 +250,109 @@ class TwoThreeTree {
     }
 };
 
+class AVLTree {
+private:
+    AVLNode* root;
+
+    int getHeight(AVLNode* n) { return n ? n->height : 0; }
+    int getBalance(AVLNode* n) { return n ? getHeight(n->left) - getHeight(n->right) : 0; }
+
+    // 右旋轉
+    AVLNode* rightRotate(AVLNode* y) {
+        AVLNode* x = y->left;
+        AVLNode* T2 = x->right;
+        x->right = y;
+        y->left = T2;
+        y->height = std::max(getHeight(y->left), getHeight(y->right)) + 1;
+        x->height = std::max(getHeight(x->left), getHeight(x->right)) + 1;
+        return x;
+    }
+
+    // 左旋轉
+    AVLNode* leftRotate(AVLNode* x) {
+        AVLNode* y = x->right;
+        AVLNode* T2 = y->left;
+        y->left = x;
+        x->right = T2;
+        x->height = std::max(getHeight(x->left), getHeight(x->right)) + 1;
+        y->height = std::max(getHeight(y->left), getHeight(y->right)) + 1;
+        return y;
+    }
+
+    AVLNode* insert(AVLNode* node, std::string name, int id) {
+        if (node == nullptr) return new AVLNode(name, id);
+
+        // [重點 1] 必須先處理重複，且名稱必須完全一致
+        if (name == node->schoolName) {
+            node->idList.push_back(id);
+            return node;
+        }
+
+        if (name < node->schoolName)
+            node->left = insert(node->left, name, id);
+        else
+            node->right = insert(node->right, name, id);
+
+        node->height = 1 + std::max(getHeight(node->left), getHeight(node->right));
+
+        int balance = getBalance(node);
+
+        // [重點 2] 旋轉判定時，比較的對象必須是 node->left->schoolName
+        // LL Case
+        if (balance > 1 && name < node->left->schoolName)
+            return rightRotate(node);
+
+        // RR Case
+        if (balance < -1 && name > node->right->schoolName)
+            return leftRotate(node);
+
+        // LR Case
+        if (balance > 1 && name > node->left->schoolName) {
+            node->left = leftRotate(node->left);
+            return rightRotate(node);
+        }
+
+        // RL Case
+        if (balance < -1 && name < node->right->schoolName) {
+            node->right = rightRotate(node->right);
+            return leftRotate(node);
+        }
+
+        return node;
+    }
+
+    int countNodes(AVLNode* node) {
+        if (!node) return 0;
+        return 1 + countNodes(node->left) + countNodes(node->right);
+    }
+
+public:
+    AVLTree() : root(nullptr) {}
+
+    void insertItem(std::string name, int id) {
+        root = insert(root, name, id); // 必須賦值給 root，否則旋轉後 root 會指向舊位置
+    }
+
+    void ShowRootData(const std::vector<Data>& datalist) {
+        if (!root) return;
+        
+        // 題目要求：節點內資料依序號由小到大顯示
+        std::sort(root->idList.begin(), root->idList.end());
+
+        std::cout << "Tree height = " << getHeight(root) << "\n";
+        std::cout << "Number of nodes = " << countNodes(root) << "\n";
+
+        for (int i = 0; i < root->idList.size(); ++i) {
+            const Data& d = datalist[root->idList[i] - 1];
+            std::cout << i + 1 << ": [" << d.serial << "] " 
+                    << d.school_name << ", " << d.dept_name << ", "
+                    << d.day_type << ", " << d.level << ", "
+                    << d.students << ", " << d.graduates << "\n";
+        }
+        std::cout << "\n" << std::endl;
+    }
+};
+
 int ParseNumber(std::string temp) {
     std::string num = "";
     for (int i = 0; i < temp.size(); i++) {
@@ -326,6 +442,12 @@ void Mission2(std::vector<Data> &datalist) {
         std::cout << "\n### Choose 1 first. ###\n" << std::endl;
         return;
     }
+
+    AVLTree AVL;
+    for (int i = 0; i < datalist.size(); i++) {
+        AVL.insertItem(datalist[i].school_name, datalist[i].serial);
+    }
+    AVL.ShowRootData(datalist);
 }
 
 void Mission3() {
