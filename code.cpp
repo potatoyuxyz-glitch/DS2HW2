@@ -44,7 +44,21 @@ struct Node {
 class TwoThreeTree {
   private:
     Node *root;
-    
+
+    int findInsertPos(const std::vector<int>& keys, int target) { // 使用指標傳遞，可以節省時間與記憶體
+        int low = 0;
+        int high = keys.size();
+        while (low < high) { // binary search
+            int mid = low + (high - low) / 2;
+            if (keys[mid] < target) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        return low;
+    }
+
     void split(Node* node) { // 遞迴，維護23樹的性質
         // 準備分裂成 node1 (左), node2 (右)
         Node* node1 = new Node(node->parent, node->isLeaf);
@@ -78,14 +92,14 @@ class TwoThreeTree {
         } else {
             Node* p = node->parent;
             // 將 midKey 插入父節點 p
-            auto it = lower_bound(p->keys.begin(), p->keys.end(), midKey);
-            int pos = distance(p->keys.begin(), it);
-            p->keys.insert(it, midKey);
+            int pos = findInsertPos(p->keys, midKey); // 找到中間值應該填入父節點的哪邊
+
+            p->keys.insert(p->keys.begin() + pos, midKey);
             p->idLists.insert(p->idLists.begin() + pos, midIdList);
 
             // 更新父節點的子節點指針
-            p->children.erase(p->children.begin() + pos); // 移除原本指向 node 的指標
-            p->children.insert(p->children.begin() + pos, {node1, node2});
+            p->children.erase(p->children.begin() + pos); // 移除原本指向爆開的節點指標
+            p->children.insert(p->children.begin() + pos, {node1, node2}); // 更新爆開節點的位置 
 
             // 遞迴檢查父節點是否溢位
             if (p->keys.size() == 3) split(p);
@@ -144,40 +158,21 @@ class TwoThreeTree {
         */ 
         Node* curr = root;
         while (!curr->isLeaf) {
-            // 先處理當前節點可能出現重複資料的情況
+            bool found = false;
             for (int i = 0; i < curr->keys.size(); ++i) {
-                if (gradCount == curr->keys[i]) {
+                if (gradCount == curr->keys[i]) { // 數值已存在，直接加入序號
                     curr->idLists[i].push_back(id);
                     return;
                 }
-            }
-
-            // 依照節點內的 key 數量決定去哪個小孩
-            if (curr->keys.size() == 1) {
-                // (1) 如果 curr->key[0] < gradCount，往下找最右邊的小孩
-                if (gradCount > curr->keys[0]) {
-                    curr = curr->children[1]; // size 為 1 時，children[1] 是最右邊
-                } 
-                // (2) 如果 curr->key[0] > gradCount，往下找最左邊的小孩
-                else {
-                    curr = curr->children[0];
-                }
-            } 
-            else if (curr->keys.size() == 2) {
-                // (1) 如果 curr->key[1] < gradCount，往下找最右邊的小孩
-                if (gradCount > curr->keys[1]) {
-                    curr = curr->children[2]; // size 為 2 時，children[2] 是最右邊
-                }
-                // (2) 如果 curr->key[0] > gradCount，往下找最左邊的小孩
-                else if (gradCount < curr->keys[0]) {
-                    curr = curr->children[0];
-                }
-                // (3) 如果 curr->key[1] > gradCount > curr->key[0]，往下找中間的小孩
-                else {
-                    curr = curr->children[1];
+                if (gradCount < curr->keys[i]) { // 每個key對應一個左邊的子節點
+                    curr = curr->children[i];
+                    found = true;
+                    break;
                 }
             }
+            if (!found) curr = curr->children.back(); // 最右邊
         }
+
 
         /*
         2. 經由第一步找到leaf之後，要在這個節點依照key的大小排序
@@ -245,11 +240,21 @@ class TwoThreeTree {
 int ParseNumber(std::string temp) {
     std::string num = "";
     for (int i = 0; i < temp.size(); i++) {
-        if (temp[i] != '"' && temp[i] != ',') {
-            num = num + temp[i];
+        if (temp[i] != '"' && temp[i] != ',') { // 排除'"' and ','
+            num += temp[i];
         }
     }
-    return std::stoi(num);
+
+    int result;
+    try {
+        result = std::stoi(num);
+    } catch (const std::invalid_argument& exception) {
+        result = 0;
+    } catch (const std::out_of_range& exception) {
+        result = 0;
+    }
+
+    return result;
 }
 
 bool ReadFile(std::vector<Data> &datalist) {
@@ -265,8 +270,8 @@ bool ReadFile(std::vector<Data> &datalist) {
         std::ifstream inputFile(filename);
         if (!inputFile.is_open()) {
             std::cout << "\n### " << filename << " does not exist! ###" << std::endl;
-            std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cin.clear(); // 重設錯誤狀態位元(cin)，如果不先cin.clear()那麼cin不會運作
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // 清除緩衝區中的殘留字元
         } else {
             break;
         }
@@ -336,19 +341,23 @@ void OutputFile() {
     std::ofstream outputfile(filename);
     outputfile.close();
 }
+
 void LetsGo() {
-    std::cout << "* Data Structures and Algorithms *" << std::endl;
-    std::cout << "****** Balanced Search Tree ******" << std::endl;
-    std::cout << "* 0. QUIT                        *" << std::endl;
-    std::cout << "* 1. Build 23 tree               *" << std::endl;
-    std::cout << "* 2. Build AVL tree              *" << std::endl;
-    std::cout << "**********************************" << std::endl;
-    std::cout << "Input a choice(0, 1, 2): ";
     int command;
     std::vector<Data> datalist;
-    while (std::cin >> command) {
+    while(true) {
+        std::cout << "* Data Structures and Algorithms *" << std::endl;
+        std::cout << "****** Balanced Search Tree ******" << std::endl;
+        std::cout << "* 0. QUIT                        *" << std::endl;
+        std::cout << "* 1. Build 23 tree               *" << std::endl;
+        std::cout << "* 2. Build AVL tree              *" << std::endl;
+        std::cout << "**********************************" << std::endl;
+        std::cout << "Input a choice(0, 1, 2, 3, 4): ";
+        std::cin >> command;
+        std::cout << std::endl;
+
         if (command == 0) {
-            break;
+            return;
         } else if (command == 1) {
             if (datalist.size() != 0) {
                 datalist.clear();
@@ -359,13 +368,6 @@ void LetsGo() {
         } else {
             std::cout << "\nCommand does not exist!\n" << std::endl;
         }
-        std::cout << "* Data Structures and Algorithms *" << std::endl;
-        std::cout << "****** Balanced Search Tree ******" << std::endl;
-        std::cout << "* 0. QUIT                        *" << std::endl;
-        std::cout << "* 1. Build 23 tree               *" << std::endl;
-        std::cout << "* 2. Build AVL tree              *" << std::endl;
-        std::cout << "**********************************" << std::endl;
-        std::cout << "Input a choice(0, 1, 2): ";
     }
 }
 
